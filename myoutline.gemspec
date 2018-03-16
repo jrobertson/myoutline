@@ -4,7 +4,7 @@ Gem::Specification.new do |s|
   s.summary = 'Helps build an outline from plain text.'
   s.authors = ['James Robertson']
   s.files = Dir['lib/myoutline.rb']
-  s.add_runtime_dependency('pxindex', '~> 0.1', '>=0.1.3')
+  s.add_runtime_dependency('pxindex', '~> 0.1', '>=0.1.4')
   s.signing_key = '../privatekeys/myoutline.pem'
   s.cert_chain  = ['gem-public_cert.pem']
   s.license = 'MIT'

@@ -5,14 +5,13 @@
 require 'pxindex'
 
 
-
 class MyOutline
 
-  def initialize(raw_s, debug: false)
+  def initialize(raw_s, debug: false, allsorted: true)
 
     # find the entries which aren't on the main index
     s = raw_s.sub(/<[^>]+>\n/,'')
-    doc = LineTree.new(s, debug: debug).to_doc(encapsulate: true)
+    doc = LineTree.new(s, debug: true).to_doc(encapsulate: true)
     a = doc.root.xpath('entry/text()')
     a2 = doc.root.xpath('entry//entry/text()')
     a3 = a2 - a
@@ -24,7 +23,8 @@ class MyOutline
 
     '
     
-    @pxi = PxIndex.new(s, debug: debug)
+    @pxi = PxIndex.new(s, debug: debug, indexsorted: true, 
+                       allsorted: allsorted)
     @px = @pxi.to_px
 
   end
@@ -38,4 +38,3 @@ class MyOutline
   end
 
 end
-
