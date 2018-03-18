@@ -42,11 +42,15 @@ class MyOutline
       filename = RXFHelper.writeable?(@source) ? @source : 'myoutline.txt'
     end
   
-    RXFHelper.write filename, self.to_s
+    RXFHelper.write filename, self.to_s(declaration: true)
     
   end
   
-  def to_s(declaration: true)
+  def to_px()
+    @pxi.to_px
+  end
+  
+  def to_s(declaration: false)
     
     if declaration == true then
       @pxi.to_s.sub(/(?<=^\<\?)([^\?]+)/,'myoutline')
