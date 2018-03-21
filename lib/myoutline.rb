@@ -3,13 +3,15 @@
 # file: myoutline.rb
 
 require 'pxindex'
+require 'nokogiri'
 
 
 class MyOutline
 
-  def initialize(source, debug: false, allsorted: true, autoupdate: true)
+  def initialize(source, debug: false, allsorted: true, 
+                 autoupdate: true, topic_url: '$topic')
     
-    @debug, @source = debug, source
+    @debug, @source, @topic_url = debug, source, topic_url
 
     raw_s, _ = RXFHelper.read(source)
     
@@ -46,6 +48,21 @@ class MyOutline
     
   end
   
+  def to_html()
+    
+    doc   = Nokogiri::XML(self.to_px.to_xml)
+    xsl  = Nokogiri::XSLT(xslt())
+
+    doc = Rexle.new(xsl.transform(doc).to_s)
+        
+    doc.root.css('.atopic').each do |e|
+      e.attributes[:href] = @topic_url.sub(/\$topic/, e.text)
+    end
+    
+    doc.xml(pretty: true)
+    
+  end
+  
   def to_px()
     @pxi.to_px
   end
@@ -68,6 +85,55 @@ class MyOutline
     
     a.join
     
+  end
+  
+  private
+  
+  def xslt()
+<<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<xsl:stylesheet xmlns:xsl="http://www.w3.org/1999/XSL/Transform" version="1.0">
+<xsl:output method="xml" indent="yes" />
+
+<xsl:template match='entries'>
+  <ul>
+    <xsl:apply-templates select='summary'/>
+    <xsl:apply-templates select='records'/>
+  </ul>
+</xsl:template>
+
+<xsl:template match='entries/summary'>
+</xsl:template>
+
+<xsl:template match='records/entry'>
+  <li><h1><xsl:value-of select="summary/title"/></h1><xsl:text>
+      </xsl:text>
+
+    <xsl:apply-templates select='records'/>
+
+<xsl:text>
+    </xsl:text>
+  </li>
+</xsl:template>
+
+
+<xsl:template match='records/entry/records/entry'>
+    <ul id="{summary/title}">
+  <li><xsl:text>
+          </xsl:text><a href="{summary/title}" class='atopic'><xsl:value-of select="summary/title"/></a><xsl:text>
+          </xsl:text>
+
+    <xsl:apply-templates select='records'/>
+
+<xsl:text>
+        </xsl:text>
+  </li>
+    </ul>
+</xsl:template>
+
+
+</xsl:stylesheet>    
+EOF
   end
 
 end
