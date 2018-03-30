@@ -1,6 +1,6 @@
 Gem::Specification.new do |s|
   s.name = 'myoutline'
-  s.version = '0.2.0'
+  s.version = '0.2.1'
   s.summary = 'Helps build an outline from plain text.'
   s.authors = ['James Robertson']
   s.files = Dir['lib/myoutline.rb']

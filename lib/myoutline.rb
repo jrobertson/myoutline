@@ -7,6 +7,8 @@ require 'nokogiri'
 
 
 class MyOutline
+  
+  attr_reader :pxi
 
   def initialize(source, debug: false, allsorted: true, 
                  autoupdate: true, topic_url: '$topic')
@@ -28,7 +30,7 @@ class MyOutline
     # add the new entries to the main index
     s << a3.join("\n")
 
-    s.prepend '<?ph schema="entries/entry[title]"?>
+    s.prepend '<?ph schema="entries/section[heading]/entry[title, url]"?>
 
     '
     
@@ -49,14 +51,31 @@ class MyOutline
   end
   
   def to_html()
+
+    px = self.to_px
     
-    doc   = Nokogiri::XML(self.to_px.to_xml)
+    px.each_recursive do |x, parent|
+      
+      if x.is_a? Entry then
+        
+        trail = parent.attributes[:trail]
+        s = x.title.gsub(/ +/,'-')
+        x.attributes[:trail] = trail.nil? ? s : trail + '/' + s
+        
+      end
+      
+    end
+
+    doc   = Nokogiri::XML(px.to_xml)
     xsl  = Nokogiri::XSLT(xslt())
 
     doc = Rexle.new(xsl.transform(doc).to_s)
         
-    doc.root.css('.atopic').each do |e|
-      e.attributes[:href] = @topic_url.sub(/\$topic/, e.text)
+    doc.root.css('.atopic').each do |e|      
+      puts 'e: ' + e.parent.parent.xml.inspect if @debug
+      e.attributes[:href] = @topic_url.sub(/\$topic/, e.text)\
+          .sub(/\$id/, e.attributes[:id]).sub(/\$trail/, e.attributes[:trail])\
+          .to_s.gsub(/ +/,'-')
     end
     
     doc.xml(pretty: true)
@@ -77,11 +96,12 @@ class MyOutline
     
   end
   
-  def to_tree
+  def to_tree(alphabet: true)
     
     a  = @pxi.to_s.lines
     a.shift # remove the ph declaration
-    a.reject! {|x| x =~ /^(?:#[^\n]+|\n+)$/}
+    a.reject! {|x| x =~ /^(?:#[^\n]+|\n+)$/} unless alphabet
+    a.map! {|x| r = x[/^.*(?= # )/]; r ? r + "\n" : x } # strip out the URLS
     
     a.join
     
@@ -105,8 +125,8 @@ class MyOutline
 <xsl:template match='entries/summary'>
 </xsl:template>
 
-<xsl:template match='records/entry'>
-  <li><h1><xsl:value-of select="summary/title"/></h1><xsl:text>
+<xsl:template match='records/section'>
+  <li><h1><xsl:value-of select="summary/heading"/></h1><xsl:text>
       </xsl:text>
 
     <xsl:apply-templates select='records'/>
@@ -117,10 +137,12 @@ class MyOutline
 </xsl:template>
 
 
-<xsl:template match='records/entry/records/entry'>
+<xsl:template match='records/entry'>
     <ul id="{summary/title}">
   <li><xsl:text>
-          </xsl:text><a href="{summary/title}" class='atopic'><xsl:value-of select="summary/title"/></a><xsl:text>
+          </xsl:text>
+          <a href="{summary/url}" class='atopic' id='{@id}' trail='{@trail}'>
+          <xsl:value-of select="summary/title"/></a><xsl:text>
           </xsl:text>
 
     <xsl:apply-templates select='records'/>
