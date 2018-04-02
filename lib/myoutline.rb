@@ -4,40 +4,42 @@
 
 require 'pxindex'
 require 'nokogiri'
+require 'filetree_xml'
+require 'polyrex-links'
+
 
 
 class MyOutline
   
-  attr_reader :pxi
+  attr_reader :pxi, :links
 
   def initialize(source, debug: false, allsorted: true, 
                  autoupdate: true, topic_url: '$topic')
     
-    @debug, @source, @topic_url = debug, source, topic_url
+    @debug, @source, @topic_url, @allsorted, @autoupdate = debug, source, 
+        topic_url, allsorted, autoupdate
 
     raw_s, _ = RXFHelper.read(source)
-    
-    # find the entries which aren't on the main index
-    s = raw_s.sub(/<[^>]+>\n/,'')
-    doc = LineTree.new(s, debug: true).to_doc(encapsulate: true)
-    a = doc.root.xpath('entry/text()')
-    puts 'doc: ' + doc.xml if debug
-    a2 = doc.root.xpath('entry//entry/text()')
-    puts 'a2: ' + a2.inspect if debug
-    a3 = a2 - a
-    puts 'a3:' + a3.inspect if debug
-    
-    # add the new entries to the main index
-    s << a3.join("\n")
+    build_index(raw_s)
 
-    s.prepend '<?ph schema="entries/section[heading]/entry[title, url]"?>
 
-    '
+  end
+  
+  def fetch(uri)
+
+    s, remaining = @links.locate uri
+    puts 'fetch() s: ' + s.inspect if @debug
+    redirect = s =~ /^\[r\] +/i
+    return s if redirect 
     
-    @pxi = PxIndex.new(s, debug: debug, indexsorted: true, 
-                       allsorted: allsorted)
-    save() if autoupdate and self.to_s != raw_s
-
+    # md_edit goes here
+    contents, _ = RXFHelper.read(s)
+    
+    return contents
+  end  
+  
+  def ls(path='.')
+    @ftx.ls(path).map(&:to_s)
   end
   
   def save(filename=nil)
@@ -96,18 +98,63 @@ class MyOutline
     
   end
   
-  def to_tree(alphabet: true)
+  
+  def to_tree
+    format_tree(alphabet: true, nourl: true)
+  end
+  
+  def to_treelinks
+    format_tree()
+  end
+  
+  private
+  
+  def build_index(raw_s)
+    
+    # find the entries which aren't on the main index
+    s = raw_s.sub(/<[^>]+>\n/,'')
+    doc = LineTree.new(s, debug: @debug).to_doc(encapsulate: true)
+    a = doc.root.xpath('entry/text()')
+    puts 'doc: ' + doc.xml if @debug
+    a2 = doc.root.xpath('entry//entry/text()')
+    puts 'a2: ' + a2.inspect if @debug
+    a3 = a2 - a
+    puts 'a3:' + a3.inspect if @debug
+    
+    # add the new entries to the main index
+    s << a3.join("\n")
+
+    s.prepend '<?ph schema="entries/section[heading]/entry[title, url]"?>
+
+    '
+    
+    @pxi = PxIndex.new(s, debug: @debug, indexsorted: true, 
+                       allsorted: @allsorted)
+    save() if @autoupdate and self.to_s != raw_s    
+    read(self.to_s)
+  end
+  
+  def format_tree(alphabet: false, nourl: false)
     
     a  = @pxi.to_s.lines
     a.shift # remove the ph declaration
     a.reject! {|x| x =~ /^(?:#[^\n]+|\n+)$/} unless alphabet
-    a.map! {|x| r = x[/^.*(?= # )/]; r ? r + "\n" : x } # strip out the URLS
+    
+    if nourl then
+      # strip out the URLS?
+      a.map! {|x| r = x[/^.*(?= # )/]; r ? r + "\n" : x }
+    end
     
     a.join
     
-  end
+  end  
   
-  private
+  def read(s)
+    @links = PolyrexLinks.new.import(s, debug: @debug)
+    
+    s3 = s.lines.map {|x| x.split(/  | # /,2)[0]}.join("\n")
+    @ftx = FileTreeXML.new(s3, debug: @debug)    
+  end
   
   def xslt()
 <<EOF
