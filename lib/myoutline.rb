@@ -6,22 +6,23 @@ require 'pxindex'
 require 'nokogiri'
 require 'filetree_xml'
 require 'polyrex-links'
+require 'md_edit'
 
 
 
 class MyOutline
   
   attr_reader :pxi, :links
+  attr_accessor :md
 
   def initialize(source, debug: false, allsorted: true, 
-                 autoupdate: true, topic_url: '$topic')
+                 autoupdate: true, topic_url: '$topic', md_path: '.')
     
-    @debug, @source, @topic_url, @allsorted, @autoupdate = debug, source, 
-        topic_url, allsorted, autoupdate
+    @debug, @source, @topic_url = debug, source, topic_url
+    @allsorted, @autoupdate, @md_path = allsorted, autoupdate, md_path
 
     raw_s, _ = RXFHelper.read(source)
     build_index(raw_s)
-
 
   end
   
@@ -32,14 +33,23 @@ class MyOutline
     redirect = s =~ /^\[r\] +/i
     return s if redirect 
     
-    # md_edit goes here
-    contents, _ = RXFHelper.read(s)
+    f = File.join(@md_path, s)
+    puts 'f: ' + f.inspect if @debug
+    @md = MdEdit.new f, debug: @debug
+    r = edit(remaining.sub(/^\//,'').gsub(/\//,' > '))    
+    puts 'r: ' + r.inspect if @debug
+    @md.update r
     
-    return contents
-  end  
+    r
+  end
+
   
   def ls(path='.')
     @ftx.ls(path).map(&:to_s)
+  end
+  
+  def update(section)
+    @md.update section
   end
   
   def save(filename=nil)
@@ -131,8 +141,27 @@ class MyOutline
     @pxi = PxIndex.new(s, debug: @debug, indexsorted: true, 
                        allsorted: @allsorted)
     save() if @autoupdate and self.to_s != raw_s    
-    read(self.to_s)
+    read(self.to_treelinks)
   end
+  
+  def edit(s)
+
+    r = @md.find s
+    return r if r
+
+    a = s.split(/ *> */)
+
+    if a.length > 1 then
+
+      heading = a.pop.capitalize
+      r2 = edit(a.join(' > '))
+      n = r2.scan(/^#+/).last.length
+
+      r2 + ("\n%s %s\n" % [('#' * (n+1)), heading])
+
+    end
+
+  end    
   
   def format_tree(alphabet: false, nourl: false)
     
