@@ -9,7 +9,6 @@ require 'polyrex-links'
 require 'md_edit'
 
 
-
 class MyOutline
   
   attr_reader :pxi, :links
@@ -46,6 +45,10 @@ class MyOutline
   
   def ls(path='.')
     @ftx.ls(path).map(&:to_s)
+  end
+  
+  def rebuild(s)
+    build_index(s)
   end
   
   def update(section)
@@ -132,7 +135,7 @@ class MyOutline
     puts 'a3:' + a3.inspect if @debug
     
     # add the new entries to the main index
-    s << a3.join("\n")
+    s << "\n" + a3.join("\n")
 
     s.prepend '<?ph schema="entries/section[heading]/entry[title, url]"?>
 
