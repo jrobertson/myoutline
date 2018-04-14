@@ -14,11 +14,12 @@ class MyOutline
   attr_reader :pxi, :links
   attr_accessor :md
 
-  def initialize(source, debug: false, allsorted: true, 
-                 autoupdate: true, topic_url: '$topic', md_path: '.')
+  def initialize(source, debug: false, allsorted: true, autoupdate: true, 
+                 topic_url: '$topic', md_path: '.', default_md: 'main.md')
     
     @debug, @source, @topic_url = debug, source, topic_url
     @allsorted, @autoupdate, @md_path = allsorted, autoupdate, md_path
+    @default_md = default_md
 
     raw_s, _ = RXFHelper.read(source)
     build_index(raw_s)
@@ -27,10 +28,12 @@ class MyOutline
   
   def fetch(uri)
 
-    s, remaining = @links.locate uri
+    s, remaining = @links.locate(uri)
     puts 'fetch() s: ' + s.inspect if @debug
     redirect = s =~ /^\[r\] +/i
     return s if redirect 
+    
+    s ||= @default_md; remaining ||= ''
     
     f = File.join(@md_path, s)
     puts 'f: ' + f.inspect if @debug
@@ -122,28 +125,11 @@ class MyOutline
   
   private
   
-  def build_index(raw_s)
+  def build_index(s)
     
-    # find the entries which aren't on the main index
-    s = raw_s.sub(/<[^>]+>\n/,'')
-    doc = LineTree.new(s, debug: @debug).to_doc(encapsulate: true)
-    a = doc.root.xpath('entry/text()')
-    puts 'doc: ' + doc.xml if @debug
-    a2 = doc.root.xpath('entry//entry/text()')
-    puts 'a2: ' + a2.inspect if @debug
-    a3 = a2 - a
-    puts 'a3:' + a3.inspect if @debug
-    
-    # add the new entries to the main index
-    s << "\n" + a3.join("\n")
-
-    s.prepend '<?ph schema="entries/section[heading]/entry[title, url]"?>
-
-    '
-    
-    @pxi = PxIndex.new(s, debug: @debug, indexsorted: true, 
-                       allsorted: @allsorted)
-    save() if @autoupdate and self.to_s != raw_s    
+    @pxi = PxIndex.new(debug: @debug, indexsorted: true, allsorted: @allsorted)
+    @pxi.import s
+    save() if @autoupdate and self.to_s != s    
     read(self.to_treelinks)
   end
   
@@ -182,10 +168,12 @@ class MyOutline
   end  
   
   def read(s)
+    
     @links = PolyrexLinks.new.import(s, debug: @debug)
     
     s3 = s.lines.map {|x| x.split(/  | # /,2)[0]}.join("\n")
     @ftx = FileTreeXML.new(s3, debug: @debug)    
+    
   end
   
   def xslt()
