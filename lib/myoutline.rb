@@ -11,24 +11,127 @@ require 'md_edit'
 
 class MyOutline
   
-  attr_reader :pxi, :links
+  attr_reader :outline
   attr_accessor :md
+  
+  class Outline
+    
+    attr_reader :ftx, :links, :pxi
+    
+    def initialize(source, debug: false, allsorted: true, autoupdate: true)
+      
+      @debug, @source = debug, source
+      @allsorted, @autoupdate = allsorted, autoupdate
+      
+      build_index(source)
+
+    end
+    
+    def autosave(s=nil)
+      
+      puts 'inside autosave ; @autoupdate: ' + @autoupdate.inspect if @debug
+      
+      if @autoupdate then
+        puts 'before save' if @debug
+        save() if s.nil? or self.to_s != s      
+      end
+      
+    end
+    
+    def locate(s)
+      @links.locate s
+    end
+      
+    def ls(path='.')
+      @ftx.ls(path).map(&:to_s)
+    end    
+    
+    def save(filename=nil)
+      
+      if filename.nil? then
+        filename = RXFHelper.writeable?(@source) ? @source : 'myoutline.txt'
+      end
+    
+      RXFHelper.write filename, self.to_s(declaration: true)
+      
+    end    
+    
+    def to_px()
+      @pxi.to_px
+    end
+    
+    def to_s(declaration: false)
+      
+      if declaration == true then
+        @pxi.to_s.sub(/(?<=^\<\?)([^\?]+)/,'myoutline')
+      else
+        @pxi.to_s.lines[1..-1].join.lstrip
+      end
+      
+    end    
+    
+    def to_tree
+      format_tree(alphabet: true, nourl: true)
+    end
+    
+    def to_treelinks
+      format_tree()
+    end    
+    
+    private
+    
+    def build_index(s)
+      
+      @pxi = PxIndex.new(debug: @debug, indexsorted: @indexsorted, 
+                         allsorted: @allsorted)
+      @pxi.import s
+      autosave(s)
+      read(self.to_treelinks)
+      
+    end
+
+    def format_tree(alphabet: false, nourl: false)
+      
+      a  = @pxi.to_s.lines
+      a.shift # remove the ph declaration
+      a.reject! {|x| x =~ /^(?:#[^\n]+|\n+)$/} unless alphabet
+      
+      if nourl then
+        # strip out the URLS?
+        a.map! {|x| r = x[/^.*(?= # )/]; r ? r + "\n" : x }
+      end
+      
+      a.join
+      
+    end      
+
+    def read(s)
+      
+      @links = PolyrexLinks.new.import(s, debug: @debug)
+      
+      s3 = s.lines.map {|x| x.split(/  | # /,2)[0]}.join("\n")
+      @ftx = FileTreeXML.new(s3, debug: @debug)    
+      
+    end    
+
+  end
 
   def initialize(source, debug: false, allsorted: true, autoupdate: true, 
                  topic_url: '$topic', md_path: '.', default_md: 'main.md')
     
-    @debug, @source, @topic_url = debug, source, topic_url
-    @allsorted, @autoupdate, @md_path = allsorted, autoupdate, md_path
+    @debug, @topic_url = debug, topic_url
+    @md_path = md_path
     @default_md = default_md
+    @allsorted, @autoupdate = allsorted, autoupdate
 
-    raw_s, _ = RXFHelper.read(source)
-    build_index(raw_s)
+    @outline = Outline.new(source, debug: debug, 
+                           allsorted: allsorted, autoupdate: autoupdate)
 
   end
   
   def fetch(uri)
 
-    s, remaining = @links.locate(uri)
+    s, remaining = @outline.locate(uri)
     puts 'fetch() s: ' + s.inspect if @debug
     redirect = s =~ /^\[r\] +/i
     return s if redirect 
@@ -39,33 +142,43 @@ class MyOutline
     puts 'f: ' + f.inspect if @debug
     @md = MdEdit.new f, debug: @debug
     r = edit(remaining.sub(/^\//,'').gsub(/\//,' > '))    
-    puts 'r: ' + r.inspect if @debug
+    puts 'fetch() r: ' + r.inspect if @debug
     @md.update r
     
     r
   end
-
-  
-  def ls(path='.')
-    @ftx.ls(path).map(&:to_s)
-  end
   
   def rebuild(s)
-    build_index(s)
+    @outline = Outline.new s
   end
   
   def update(section)
     @md.update section
-  end
+  end  
   
-  def save(filename=nil)
+  def update_tree(s)
     
-    if filename.nil? then
-      filename = RXFHelper.writeable?(@source) ? @source : 'myoutline.txt'
+    mo2 = Outline.new(s, debug: @debug, 
+                           allsorted: @allsorted, autoupdate: @autoupdate)
+    
+    h = @outline.links.to_h
+    links = mo2.links
+    
+    mo2.links.to_h.each do |title, file|
+      
+      if @debug then
+        puts 'title: ' + title.inspect
+        puts 'h[title]: ' + h[title].inspect
+      end
+      
+     links.link(title).url = h[title] if h[title]
     end
-  
-    RXFHelper.write filename, self.to_s(declaration: true)
     
+    puts 'before Outline.new: ' + links.to_s(header: false).inspect if @debug
+    
+    @outline  = Outline.new(links.to_s(header: false), debug: @debug, 
+                           allsorted: @allsorted, autoupdate: @autoupdate)
+    @outline.autosave
   end
   
   def to_html()
@@ -100,38 +213,8 @@ class MyOutline
     
   end
   
-  def to_px()
-    @pxi.to_px
-  end
-  
-  def to_s(declaration: false)
-    
-    if declaration == true then
-      @pxi.to_s.sub(/(?<=^\<\?)([^\?]+)/,'myoutline')
-    else
-      @pxi.to_s.lines[1..-1].join.lstrip
-    end
-    
-  end
-  
-  
-  def to_tree
-    format_tree(alphabet: true, nourl: true)
-  end
-  
-  def to_treelinks
-    format_tree()
-  end
   
   private
-  
-  def build_index(s)
-    
-    @pxi = PxIndex.new(debug: @debug, indexsorted: true, allsorted: @allsorted)
-    @pxi.import s
-    save() if @autoupdate and self.to_s != s    
-    read(self.to_treelinks)
-  end
   
   def edit(s)
 
@@ -150,30 +233,6 @@ class MyOutline
 
     end
 
-  end    
-  
-  def format_tree(alphabet: false, nourl: false)
-    
-    a  = @pxi.to_s.lines
-    a.shift # remove the ph declaration
-    a.reject! {|x| x =~ /^(?:#[^\n]+|\n+)$/} unless alphabet
-    
-    if nourl then
-      # strip out the URLS?
-      a.map! {|x| r = x[/^.*(?= # )/]; r ? r + "\n" : x }
-    end
-    
-    a.join
-    
-  end  
-  
-  def read(s)
-    
-    @links = PolyrexLinks.new.import(s, debug: @debug)
-    
-    s3 = s.lines.map {|x| x.split(/  | # /,2)[0]}.join("\n")
-    @ftx = FileTreeXML.new(s3, debug: @debug)    
-    
   end
   
   def xslt()
