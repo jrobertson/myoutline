@@ -15,6 +15,7 @@ class MyOutline
   attr_accessor :md
   
   class Outline
+    using ColouredText
     
     attr_reader :ftx, :links, :pxi
     
@@ -29,10 +30,10 @@ class MyOutline
     
     def autosave(s=nil)
       
-      puts 'inside autosave ; @autoupdate: ' + @autoupdate.inspect if @debug
+      puts ('inside autosave ; @autoupdate: ' + @autoupdate.inspect).debug if @debug
       
       if @autoupdate then
-        puts 'before save' if @debug
+        puts 'before save'.info if @debug
         save() if s.nil? or self.to_s != s      
       end
       
@@ -183,7 +184,7 @@ class MyOutline
   
   def to_html()
 
-    px = self.to_px
+    px = self.outline.to_px
     
     px.each_recursive do |x, parent|
       
@@ -197,19 +198,26 @@ class MyOutline
       
     end
 
-    doc   = Nokogiri::XML(px.to_xml)
+    doc  = Nokogiri::XML(px.to_xml)
     xsl  = Nokogiri::XSLT(xslt())
 
-    doc = Rexle.new(xsl.transform(doc).to_s)
+    html_doc = Rexle.new(xsl.transform(doc).to_s)
         
-    doc.root.css('.atopic').each do |e|      
+    html_doc.root.css('.atopic').each do |e|      
+      
       puts 'e: ' + e.parent.parent.xml.inspect if @debug
-      e.attributes[:href] = @topic_url.sub(/\$topic/, e.text)\
-          .sub(/\$id/, e.attributes[:id]).sub(/\$trail/, e.attributes[:trail])\
-          .to_s.gsub(/ +/,'-')
+      
+      href = e.attributes[:href]
+      if href.empty? or href[0] == '!' then
+        
+        e.attributes[:href] = @topic_url.sub(/\$topic/, e.text)\
+            .sub(/\$id/, e.attributes[:id]).sub(/\$trail/, e.attributes[:trail])\
+            .to_s.gsub(/ +/,'-')
+        
+      end
     end
     
-    doc.xml(pretty: true)
+    html_doc.xml(pretty: true, declaration: false)
     
   end
   
