@@ -38,6 +38,10 @@ class MyOutline
       end
       
     end
+
+    def build_html(&blk)
+      @pxi.build_html(&blk)
+    end
     
     def locate(s)
       @links.locate s
@@ -183,41 +187,14 @@ class MyOutline
   end
   
   def to_html()
-
-    px = self.outline.to_px
     
-    px.each_recursive do |x, parent|
+    @outline.build_html do |e|
       
-      if x.is_a? Entry then
-        
-        trail = parent.attributes[:trail]
-        s = x.title.gsub(/ +/,'-')
-        x.attributes[:trail] = trail.nil? ? s : trail + '/' + s
-        
-      end
+      e.attributes[:href] = @topic_url.sub(/\$topic/, e.text)\
+          .sub(/\$id/, e.attributes[:id]).sub(/\$trail/, e.attributes[:trail])\
+          .to_s.gsub(/ +/,'-')      
       
-    end
-
-    doc  = Nokogiri::XML(px.to_xml)
-    xsl  = Nokogiri::XSLT(xslt())
-
-    html_doc = Rexle.new(xsl.transform(doc).to_s)
-        
-    html_doc.root.css('.atopic').each do |e|      
-      
-      puts 'e: ' + e.parent.parent.xml.inspect if @debug
-      
-      href = e.attributes[:href]
-      if href.empty? or href[0] == '!' then
-        
-        e.attributes[:href] = @topic_url.sub(/\$topic/, e.text)\
-            .sub(/\$id/, e.attributes[:id]).sub(/\$trail/, e.attributes[:trail])\
-            .to_s.gsub(/ +/,'-')
-        
-      end
-    end
-    
-    html_doc.xml(pretty: true, declaration: false)
+    end    
     
   end
   
@@ -242,54 +219,6 @@ class MyOutline
     end
 
   end
-  
-  def xslt()
-<<EOF
-<?xml version="1.0" encoding="UTF-8"?>
-<xsl:stylesheet xmlns:xsl="http://www.w3.org/1999/XSL/Transform" version="1.0">
-<xsl:output method="xml" indent="yes" />
 
-<xsl:template match='entries'>
-  <ul>
-    <xsl:apply-templates select='summary'/>
-    <xsl:apply-templates select='records'/>
-  </ul>
-</xsl:template>
-
-<xsl:template match='entries/summary'>
-</xsl:template>
-
-<xsl:template match='records/section'>
-  <li><h1><xsl:value-of select="summary/heading"/></h1><xsl:text>
-      </xsl:text>
-
-    <xsl:apply-templates select='records'/>
-
-<xsl:text>
-    </xsl:text>
-  </li>
-</xsl:template>
-
-
-<xsl:template match='records/entry'>
-    <ul id="{summary/title}">
-  <li><xsl:text>
-          </xsl:text>
-          <a href="{summary/url}" class='atopic' id='{@id}' trail='{@trail}'>
-          <xsl:value-of select="summary/title"/></a><xsl:text>
-          </xsl:text>
-
-    <xsl:apply-templates select='records'/>
-
-<xsl:text>
-        </xsl:text>
-  </li>
-    </ul>
-</xsl:template>
-
-
-</xsl:stylesheet>    
-EOF
-  end
 
 end
