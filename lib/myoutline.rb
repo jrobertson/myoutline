@@ -198,6 +198,10 @@ class MyOutline
     
   end
   
+  def to_s()
+    @outline
+  end
+  
   
   private
   
